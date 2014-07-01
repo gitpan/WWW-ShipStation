@@ -2,7 +2,7 @@ package WWW::ShipStation;
 
 use strict;
 use 5.008_005;
-our $VERSION = '0.01';
+our $VERSION = '0.03';
 
 use LWP::UserAgent;
 use JSON;
@@ -19,7 +19,7 @@ sub new {
     $args{ua} ||= LWP::UserAgent->new();
     $args{json} ||= JSON->new->allow_nonref->utf8;
 
-    $args{API_BASE} ||= 'https://data.shipstation.com/1.1/';
+    $args{API_BASE} ||= 'https://data.shipstation.com/1.3/';
 
     $args{ua}->default_header('Accept', 'application/json'); # JSON is better
     $args{ua}->credentials('data.shipstation.com:443', 'ShipStation', $args{user}, $args{pass});
@@ -158,7 +158,7 @@ __END__
 
 =head1 NAME
 
-WWW::ShipStation - Blah blah blah
+WWW::ShipStation - ShipStation API
 
 =head1 SYNOPSIS
 
@@ -317,6 +317,16 @@ L<http://api.shipstation.com/Store-Resource.ashx>
     ); # https://data.shipstation.com/1.1/Warehouses()?$filter=Default eq true
 
 L<http://api.shipstation.com/Warehouse-Resource.ashx>
+
+
+=head2 request
+
+    my $data = $ws->request('Customers()');
+    my $data = $ws->request('Warehouses()',
+        filter => 'Default eq true'
+    );
+
+internal use
 
 =head1 AUTHOR
 

@@ -1,5 +1,5 @@
 ---
-abstract: 'Blah blah blah'
+abstract: 'ShipStation API'
 author:
   - 'Fayland Lam <fayland@gmail.com>'
 build_requires:
@@ -22,12 +22,12 @@ no_index:
     - eg
     - examples
 requires:
-  IO::Socket::SSL: 0
   JSON: 0
+  LWP::Protocol::https: 0
   LWP::UserAgent: 0
   perl: 5.008005
 resources:
   bugtracker: https://github.com/fayland/perl-WWW-ShipStation/issues
   homepage: https://github.com/fayland/perl-WWW-ShipStation
   repository: https://github.com/fayland/perl-WWW-ShipStation.git
-version: 0.01
+version: 0.03

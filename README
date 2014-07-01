@@ -1,5 +1,5 @@
 NAME
-    WWW::ShipStation - Blah blah blah
+    WWW::ShipStation - ShipStation API
 
 SYNOPSIS
         use WWW::ShipStation;
@@ -137,6 +137,14 @@ METHODS
         ); # https://data.shipstation.com/1.1/Warehouses()?$filter=Default eq true
 
     <http://api.shipstation.com/Warehouse-Resource.ashx>
+
+  request
+        my $data = $ws->request('Customers()');
+        my $data = $ws->request('Warehouses()',
+            filter => 'Default eq true'
+        );
+
+    internal use
 
 AUTHOR
     Fayland Lam <fayland@gmail.com>
