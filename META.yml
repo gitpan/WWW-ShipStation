@@ -30,4 +30,4 @@ resources:
   bugtracker: https://github.com/fayland/perl-WWW-ShipStation/issues
   homepage: https://github.com/fayland/perl-WWW-ShipStation
   repository: https://github.com/fayland/perl-WWW-ShipStation.git
-version: 0.03
+version: 0.04

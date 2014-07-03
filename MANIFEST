@@ -8,6 +8,9 @@ META.yml
 README
 cpanfile
 dist.ini
+examples/createOrder.pl
+examples/createOrderItem.pl
+examples/deleteOrder.pl
 examples/getCarriers.pl
 examples/getCustomers.pl
 lib/WWW/ShipStation.pm

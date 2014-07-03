@@ -138,6 +138,47 @@ METHODS
 
     <http://api.shipstation.com/Warehouse-Resource.ashx>
 
+  createOrder
+        my $order = $ws->createOrder(
+            StoreID => 0,
+            OrderNumber => "TEST001",
+            ImportKey   => "TEST001",
+            OrderDate   => "2014-07-02T09:30:00",
+            PayDate     => "2014-07-02T09:30:00",
+            OrderStatusID => 2,
+            RequestedShippingService => "USPS Priority Mail",
+            OrderTotal => '123.45',
+            AmountPaid => '123.45',
+            ShippingAmount => '4.50',
+            WeightOz => 16,
+            NotesFromBuyer => "Please make sure it gets here by Monday!",
+            Username       => 'customer@mystore.com',
+            BuyerEmail     => 'customer@mystore.com',
+            ShipName       => "The President",
+            ShipCompany    => "US Govt",
+            ShipStreet1    => "1600 Pennsylvania Ave",
+            ShipCity       => "Washington",
+            ShipState      => "DC",
+            ShipPostalCode => "20500",
+            ShipCountryCode => "US",
+            ShipPhone      => "512-555-5555",
+        );
+
+  createOrderItem
+        my $orderItem = $ws->createOrderItem(
+            OrderID => $OrderID,
+            SKU => "FD88821",
+            Description   => "My Product Name",
+            ThumbnailUrl   => "http://www.mystore.com/products/12345.jpg",
+            WeightOz => 8,
+            Quantity => 2,
+            UnitPrice => 13.99,
+            Options => "Size: Large\nColor: Green",
+        );
+
+  deleteOrder
+        my $is_success = $ws->deleteOrder($OrderID);
+
   request
         my $data = $ws->request('Customers()');
         my $data = $ws->request('Warehouses()',

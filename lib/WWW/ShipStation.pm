@@ -2,12 +2,13 @@ package WWW::ShipStation;
 
 use strict;
 use 5.008_005;
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 use LWP::UserAgent;
 use JSON;
 use Carp 'croak';
 use URI::Escape qw/uri_escape/;
+use HTTP::Request;
 
 sub new {
     my $class = shift;
@@ -20,9 +21,6 @@ sub new {
     $args{json} ||= JSON->new->allow_nonref->utf8;
 
     $args{API_BASE} ||= 'https://data.shipstation.com/1.3/';
-
-    $args{ua}->default_header('Accept', 'application/json'); # JSON is better
-    $args{ua}->credentials('data.shipstation.com:443', 'ShipStation', $args{user}, $args{pass});
 
     bless \%args, $class;
 }
@@ -142,14 +140,244 @@ sub request {
         $url .= '?' . join('&', map { join('=', $_, uri_escape($params{$_})) } keys %params);
     }
 
-    my $resp = $self->{ua}->get($self->{API_BASE} . $url);
-    # use Data::Dumper; print STDERR Dumper(\$resp);
-    unless ($resp->is_success) {
-        return { error => $resp->status_line };
+    my $req = HTTP::Request->new(GET => $self->{API_BASE} . $url);
+    $req->authorization_basic($self->{user}, $self->{pass});
+    $req->header('Accept', 'application/json'); # JSON is better
+    my $res = $self->{ua}->request($req);
+    # use Data::Dumper; print STDERR Dumper(\$res);
+    if ($res->header('Content-Type') =~ m{application/json}) {
+        return $self->{json}->decode($res->decoded_content);
     }
-    return $self->{json}->decode($resp->decoded_content);
+    unless ($res->is_success) {
+        return {
+            'error' => {
+                'code' => '',
+                'message' => {
+                    'lang' => 'en-US',
+                    'value' => $res->status_line,
+                }
+            }
+        };
+    }
 }
 
+sub __now {
+    my @d = localtime();
+    return sprintf('%04d-%02d-%02dT%02d:%02d:%02d', $d[5] + 1900, $d[4] + 1, $d[3], $d[2], $d[1]);
+}
+
+sub createOrder {
+    my $self = shift;
+
+    my %args = @_ % 2 ? %{$_[0]} : @_;
+
+    my $__now = __now();
+    my $content = <<XML;
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<entry xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns="http://www.w3.org/2005/Atom">
+  <category scheme="http://schemas.microsoft.com/ado/2007/08/dataservices/scheme" term="SS.WebData.Order" />
+  <title />
+  <author>
+    <name />
+  </author>
+  <updated>$__now.1022961Z</updated>
+  <id />
+  <content type="application/xml">
+    <m:properties>
+XML
+
+    # bool
+    foreach my $x ('Active', 'AdditionalHandling', 'Gift', 'NonMachinable', 'SaturdayDelivery', 'ShowPostage') {
+        if ($args{$x}) {
+            $content .= qq~<d:$x m:type="Edm.Boolean">true</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.Boolean">false</d:$x>\n~;
+        }
+    }
+
+    # byte
+    foreach my $x ('AddressVerified', 'Confirmation', 'InsuranceProvider') {
+        my $v = $args{$x} ? 1 : 0;
+        $content .= qq~<d:$x m:type="Edm.Byte">$v</d:$x>\n~;
+    }
+
+    # decimal
+    foreach my $x ('AmountPaid', 'ConfirmationCost', 'Height', 'Length', 'Width', 'InsuranceCost', 'InsuredValue', 'OrderTotal', 'OtherCost', 'ShippingAmount') {
+        if (exists $args{$x}) {
+            my $v = sprintf('%.2f', $args{$x});
+            $content .= qq~<d:$x m:type="Edm.Decimal">$v</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.Decimal" m:null="true" />\n~;
+        }
+    }
+
+    # int32
+    foreach my $x ('CustomerID', 'EmailTemplateID', 'PackageTypeID', 'PackingSlipID', 'MarketplaceID', 'OrderID', 'OrderStatusID', 'ProviderID', 'RequestedServiceID', 'SellerID', 'ServiceID', 'StoreID', 'WarehouseID', 'WeightOz') {
+        $args{$x} ||= 0 if $x eq 'OrderID';
+        if (exists $args{$x}) {
+            $content .= qq~<d:$x m:type="Edm.Int32">$args{$x}</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.Int32" m:null="true" />\n~;
+        }
+    }
+
+    # DateTime
+    foreach my $x ('ImportBatch') {
+        if (exists $args{$x}) {
+            $content .= qq~<d:$x m:type="Edm.Guid">$args{$x}</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.Guid" m:null="true" />\n~;
+        }
+    }
+
+    # DateTime
+    foreach my $x ('CreateDate', 'HoldUntil', 'ModifyDate', 'OrderDate', 'PayDate', 'ShipDate') {
+        if (exists $args{$x}) {
+            $content .= qq~<d:$x m:type="Edm.DateTime">$args{$x}</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.DateTime" m:null="true" />\n~;
+        }
+    }
+
+    foreach my $x ('BuyerEmail', 'ExternalPaymentID', 'ExternalUrl', 'ImportKey', 'NonDelivery', 'CustomsContents', 'NotesFromBuyer', 'NotesToBuyer', 'InternalNotes', 'OrderNumber', 'RateError', 'RequestedShippingService', 'ResidentialIndicator', 'ShipCity', 'ShipCompany', 'ShipCountryCode', 'ShipName', 'ShipPhone', 'ShipPostalCode', 'ShipState', 'ShipStreet1', 'ShipStreet2', 'ShipStreet3', 'Username') {
+        if (exists $args{$x}) {
+            $content .= qq~<d:$x>~ . __simple_escape($args{$x}) . qq~</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:null="true" />\n~;
+        }
+    }
+
+    $content .= <<'XML';
+    </m:properties>
+  </content>
+</entry>
+XML
+
+    $self->__request('POST', 'https://data.shipstation.com/1.2/Orders', $content);
+}
+
+sub __simple_escape {
+    my $str = shift;
+    $str =~ s/\&/\&amp;/g;
+    $str =~ s/\</\&lt;/g;
+    $str =~ s/\>/\&gt;/g;
+    $str;
+}
+
+sub deleteOrder {
+    my ($self, $orderID) = @_;
+
+    $self->__request('DELETE', "http://data.shipstation.com/1.2/Orders($orderID)");
+}
+
+sub createOrderItem {
+    my $self = shift;
+
+    my %args = @_ % 2 ? %{$_[0]} : @_;
+
+    my $__now = __now();
+    my $content = <<XML;
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<entry xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns="http://www.w3.org/2005/Atom">
+  <category scheme="http://schemas.microsoft.com/ado/2007/08/dataservices/scheme" term="SS.WebData.OrderItem" />
+  <title />
+  <author>
+    <name />
+  </author>
+  <updated>$__now.6214402Z</updated>
+  <id />
+  <content type="application/xml">
+    <m:properties>
+XML
+
+    # bool
+    foreach my $x ('Inactive') {
+        if ($args{$x}) {
+            $content .= qq~<d:$x m:type="Edm.Boolean">true</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.Boolean">false</d:$x>\n~;
+        }
+    }
+
+    # decimal
+    foreach my $x ('ExtendedPrice', 'ShippingAmount', 'TaxAmount', 'WeightOz') {
+        if (exists $args{$x}) {
+            my $v = sprintf('%.2f', $args{$x});
+            $content .= qq~<d:$x m:type="Edm.Decimal">$v</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.Decimal" m:null="true" />\n~;
+        }
+    }
+
+    # int32
+    foreach my $x ('OrderID', 'OrderItemID', 'ProductID', 'Quantity', 'UnitCost', 'UnitPrice') {
+        $args{$x} ||= 0 if $x eq 'OrderID' or $x eq 'OrderItemID';
+        if (exists $args{$x}) {
+            $content .= qq~<d:$x m:type="Edm.Int32">$args{$x}</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.Int32" m:null="true" />\n~;
+        }
+    }
+
+    # DateTime
+    foreach my $x ('CreateDate', 'ModifyDate') {
+        if (exists $args{$x}) {
+            $content .= qq~<d:$x m:type="Edm.DateTime">$args{$x}</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:type="Edm.DateTime" m:null="true" />\n~;
+        }
+    }
+
+    foreach my $x ('Description', 'ItemUrl', 'Options', 'SKU', 'ThumbnailUrl', 'UPC', 'WarehouseLocation') {
+        if (exists $args{$x}) {
+            $content .= qq~<d:$x>~ . __simple_escape($args{$x}) . qq~</d:$x>\n~;
+        } else {
+            $content .= qq~<d:$x m:null="true" />\n~;
+        }
+    }
+
+    $content .= <<'XML';
+    </m:properties>
+  </content>
+</entry>
+XML
+
+    $self->__request('POST', 'https://data.shipstation.com/1.2/OrderItems', $content);
+}
+
+sub __request {
+    my ($self, $method, $url, $content) = @_;
+
+    my $req = HTTP::Request->new($method => $url);
+    $req->authorization_basic($self->{user}, $self->{pass});
+    $req->header('Accept', 'application/json'); # JSON is better
+    $req->header('Accept-Charset' => 'UTF-8');
+    if ($method eq 'POST') {
+        $req->header('Content-Type' => 'application/atom+xml');
+    }
+    $req->content($content) if $content;
+
+    my $res = $self->{ua}->request($req);
+    # use Data::Dumper; print STDERR Dumper(\$res);
+    if ($method eq 'DELETE') {
+        return $res->code == 204 ? 1 : 0;
+    }
+    if ($res->header('Content-Type') =~ m{application/json}) {
+        return $self->{json}->decode($res->decoded_content);
+    }
+    unless ($res->is_success) {
+        return {
+            'error' => {
+                'code' => '',
+                'message' => {
+                    'lang' => 'en-US',
+                    'value' => $res->status_line
+                }
+            }
+        };
+    }
+    return $res->decoded_content;
+}
 
 1;
 __END__
@@ -318,6 +546,49 @@ L<http://api.shipstation.com/Store-Resource.ashx>
 
 L<http://api.shipstation.com/Warehouse-Resource.ashx>
 
+=head2 createOrder
+
+    my $order = $ws->createOrder(
+        StoreID => 0,
+        OrderNumber => "TEST001",
+        ImportKey   => "TEST001",
+        OrderDate   => "2014-07-02T09:30:00",
+        PayDate     => "2014-07-02T09:30:00",
+        OrderStatusID => 2,
+        RequestedShippingService => "USPS Priority Mail",
+        OrderTotal => '123.45',
+        AmountPaid => '123.45',
+        ShippingAmount => '4.50',
+        WeightOz => 16,
+        NotesFromBuyer => "Please make sure it gets here by Monday!",
+        Username       => 'customer@mystore.com',
+        BuyerEmail     => 'customer@mystore.com',
+        ShipName       => "The President",
+        ShipCompany    => "US Govt",
+        ShipStreet1    => "1600 Pennsylvania Ave",
+        ShipCity       => "Washington",
+        ShipState      => "DC",
+        ShipPostalCode => "20500",
+        ShipCountryCode => "US",
+        ShipPhone      => "512-555-5555",
+    );
+
+=head2 createOrderItem
+
+    my $orderItem = $ws->createOrderItem(
+        OrderID => $OrderID,
+        SKU => "FD88821",
+        Description   => "My Product Name",
+        ThumbnailUrl   => "http://www.mystore.com/products/12345.jpg",
+        WeightOz => 8,
+        Quantity => 2,
+        UnitPrice => 13.99,
+        Options => "Size: Large\nColor: Green",
+    );
+
+=head2 deleteOrder
+
+    my $is_success = $ws->deleteOrder($OrderID);
 
 =head2 request
 
